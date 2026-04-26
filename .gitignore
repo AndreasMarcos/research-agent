@@ -1,0 +1,21 @@
+# Ambiente virtual
+.venv/
+
+# Qdrant storage
+qdrant_storage/
+
+# Dados
+data/*
+!data/.gitkeep
+
+# Variáveis de ambiente
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# VSCode
+.vscode/
