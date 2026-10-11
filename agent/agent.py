@@ -1,59 +1,14 @@
+import logging
+
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
-from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
-from rag.store import query_as_string
 from agent.prompt import SYSTEM_PROMPT
 from models import AgentResponse
 from config import GROQ_API_KEY, GROQ_MODEL
+from tools import rag_search, web_search, summarize
 
-
-# ── definição das ferramentas ──────────────────────────────────────────
-
-@tool
-def rag_search(query: str) -> str:
-    """Search for information in indexed scientific documents.
-    Use this tool when the question is about content that may be in
-    the indexed documents such as research papers, methodologies,
-    datasets or specific technical details."""
-    print(f"\n[rag_tool] Buscando: '{query}'")
-    return query_as_string(query)
-
-
-@tool
-def web_search(query: str) -> str:
-    """Search for current information on the web using DuckDuckGo.
-    Use this tool when the question requires up-to-date information
-    or information not available in the indexed documents."""
-    from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
-    print(f"\n[web_tool] Buscando na web: '{query}'")
-    try:
-        search = DuckDuckGoSearchAPIWrapper()
-        return search.run(query)
-    except Exception as e:
-        return f"Erro na busca web: {e}"
-
-
-@tool
-def summarize(text: str) -> str:
-    """Summarize a long text into a concise paragraph.
-    Use this tool when the retrieved content is too long or verbose
-    and needs to be condensed before including in the final answer."""
-    from groq import Groq
-    print(f"\n[summarize_tool] Sumarizando {len(text)} caracteres...")
-    try:
-        client = Groq(api_key=GROQ_API_KEY)
-        response = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": "Summarize the following text concisely and accurately."},
-                {"role": "user", "content": f"Summarize:\n\n{text}"}
-            ],
-            temperature=0.0,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Erro ao sumarizar: {e}"
+logger = logging.getLogger(__name__)
 
 
 # ── agente ─────────────────────────────────────────────────────────────
@@ -65,7 +20,7 @@ def _get_agent():
     """Inicializa o agente uma única vez (singleton)."""
     global _agent
     if _agent is None:
-        print("[agent] Inicializando agente...")
+        logger.info("Inicializando agente...")
         llm = ChatGroq(
             api_key=GROQ_API_KEY,
             model=GROQ_MODEL,
@@ -80,33 +35,17 @@ def _get_agent():
     return _agent
 
 
-def run_agent(question: str) -> AgentResponse:
+def _parse_messages(messages: list) -> AgentResponse:
     """
-    Executa o agente para responder uma pergunta.
+    Converte as mensagens retornadas pelo agente em um AgentResponse.
 
     Args:
-        question: pergunta em linguagem natural
+        messages: lista de mensagens do LangGraph (resultado de agent.invoke)
 
     Returns:
-        AgentResponse com resposta, steps e sources.
+        AgentResponse com resposta final, steps e sources.
     """
-    print(f"\n[agent] Pergunta: '{question}'")
-
-    agent = _get_agent()
-
-    try:
-        result = agent.invoke({
-            "messages": [HumanMessage(content=question)]
-        })
-    except Exception as e:
-        return AgentResponse(
-            answer=f"Erro ao executar o agente: {e}",
-            steps=[],
-            sources=[],
-        )
-
     # extrai resposta final — última mensagem do agente
-    messages = result.get("messages", [])
     answer = messages[-1].content if messages else ""
 
     # extrai steps e sources das mensagens intermediárias
@@ -140,3 +79,32 @@ def run_agent(question: str) -> AgentResponse:
         steps=steps,
         sources=sources,
     )
+
+
+def run_agent(question: str) -> AgentResponse:
+    """
+    Executa o agente para responder uma pergunta.
+
+    Args:
+        question: pergunta em linguagem natural
+
+    Returns:
+        AgentResponse com resposta, steps e sources.
+    """
+    logger.info("Pergunta: '%s'", question)
+
+    agent = _get_agent()
+
+    try:
+        result = agent.invoke({
+            "messages": [HumanMessage(content=question)]
+        })
+    except Exception as e:
+        logger.error("Erro ao executar o agente: %s", e)
+        return AgentResponse(
+            answer=f"Erro ao executar o agente: {e}",
+            steps=[],
+            sources=[],
+        )
+
+    return _parse_messages(result.get("messages", []))

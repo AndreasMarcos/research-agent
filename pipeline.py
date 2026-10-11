@@ -1,9 +1,12 @@
+import logging
 from pathlib import Path
 import fitz
 from models import Document
 from rag.embedder import embed_documents
 from rag.store import add_documents, collection_info
 from config import CHUNK_SIZE, CHUNK_OVERLAP
+
+logger = logging.getLogger(__name__)
 
 
 # ── extração ───────────────────────────────────────────────────────────
@@ -19,7 +22,7 @@ def _extract_text(file_path: Path) -> list[Document]:
             if not text.strip():
                 continue
             if _is_fragmented(text):
-                print(f"[pipeline] Página {page_num} ignorada — texto fragmentado.")
+                logger.warning("Página %d ignorada — texto fragmentado.", page_num)
                 continue
             documents.append(Document(
                 page_content=text,
@@ -83,7 +86,8 @@ def _recursive_split(
             separator = sep
             break
 
-    parts = text.split(separator)
+    # separador vazio: divide caractere a caractere (str.split("") lança ValueError)
+    parts = list(text) if separator == "" else text.split(separator)
     chunks = []
     current = ""
 
@@ -133,13 +137,13 @@ def ingest_pdf(file_path: str | Path) -> dict:
     if path.suffix.lower() != ".pdf":
         raise ValueError(f"Esperado arquivo .pdf, recebido: {path.suffix}")
 
-    print(f"\n[pipeline] Ingerindo: {path.name}")
+    logger.info("Ingerindo: %s", path.name)
 
     docs = _extract_text(path)
-    print(f"[pipeline] {len(docs)} página(s) extraída(s).")
+    logger.info("%d página(s) extraída(s).", len(docs))
 
     chunks = _chunk_documents(docs)
-    print(f"[pipeline] {len(chunks)} chunk(s) gerado(s).")
+    logger.info("%d chunk(s) gerado(s).", len(chunks))
 
     embedded = embed_documents(chunks)
     add_documents(embedded)
@@ -154,4 +158,4 @@ def ingest_pdf(file_path: str | Path) -> dict:
 def status() -> None:
     """Exibe informações sobre o índice atual."""
     info = collection_info()
-    print(f"\n[pipeline] Collection: {info['name']} | Chunks: {info['count']}")
+    logger.info("Collection: %s | Chunks: %s", info["name"], info["count"])

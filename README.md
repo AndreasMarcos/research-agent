@@ -20,13 +20,18 @@ Pergunta → [Thought] → [Action] → [Observation] → ... → Resposta Final
 ```
 research-agent/
 ├── agent/
-│   ├── agent.py          # definição do agente e ferramentas
+│   ├── agent.py          # definição e execução do agente
 │   └── prompt.py         # system prompt do agente
+├── tools/
+│   ├── rag_tool.py       # ferramenta rag_search (busca no Qdrant)
+│   ├── web_tool.py       # ferramenta web_search (DuckDuckGo)
+│   └── summarize_tool.py # ferramenta summarize (Groq)
 ├── rag/
 │   ├── embedder.py       # geração de embeddings
 │   └── store.py          # integração com Qdrant
 ├── examples/
 │   └── run_agent.py      # exemplo de uso completo
+├── tests/                # testes automatizados (pytest, offline)
 ├── pipeline.py           # ingestão de documentos
 ├── models.py             # estruturas de dados
 └── config.py             # configurações centralizadas
@@ -69,7 +74,7 @@ Pergunta: "What are the most recent improvements to Transformer in 2024?"
 
 **1. Clone o repositório**
 ```bash
-git clone https://github.com/seu-usuario/research-agent.git
+git clone https://github.com/AndreasMarcos/research-agent.git
 cd research-agent
 ```
 
@@ -99,16 +104,15 @@ Obtenha uma API key gratuita em `https://console.groq.com`.
 
 **5. Suba o Qdrant com Docker**
 ```bash
-# Windows
-docker run --name qdrant-research -p 6333:6333 -v D:\caminho\do\projeto\qdrant_storage:/qdrant/storage qdrant/qdrant
-
-# Linux/Mac
-docker run --name qdrant-research -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+docker compose up -d
 ```
 
-Nas próximas vezes:
+O `docker-compose.yml` sobe o container `qdrant-research` na porta `6333`,
+persistindo os dados em `./qdrant_storage`. Para parar: `docker compose down`.
+
+Sem Docker Compose, o equivalente com `docker run` é:
 ```bash
-docker start qdrant-research
+docker run --name qdrant-research -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 ```
 
 **6. Execute o exemplo**
@@ -142,6 +146,18 @@ for source in response.sources:
     print(source)
 ```
 
+## Testes
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Os testes rodam totalmente offline: não precisam de API key, de servidor
+Qdrant nem de download de modelos. As dependências pesadas
+(`sentence-transformers`, `langchain-groq`, `langgraph`) e o cliente do
+Qdrant são substituídos por stubs e mocks.
+
 ## Decisões de Design
 
 **Por que LangGraph em vez da API antiga do LangChain?**
@@ -170,3 +186,7 @@ de busca mais robustas como Google Search ou Bing.
 
 **Contexto limitado por sessão** — o agente não mantém memória entre
 execuções distintas. Cada chamada a `run_agent()` é independente.
+
+## Licença
+
+Distribuído sob a licença MIT. Veja o arquivo [LICENSE](LICENSE).

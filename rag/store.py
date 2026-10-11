@@ -1,3 +1,4 @@
+import logging
 import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -17,6 +18,8 @@ from config import (
     RAG_TOP_K,
 )
 
+logger = logging.getLogger(__name__)
+
 
 _client: QdrantClient | None = None
 
@@ -24,7 +27,7 @@ _client: QdrantClient | None = None
 def _get_client() -> QdrantClient:
     global _client
     if _client is None:
-        print(f"[store] Conectando ao Qdrant em {QDRANT_HOST}:{QDRANT_PORT}")
+        logger.info("Conectando ao Qdrant em %s:%s", QDRANT_HOST, QDRANT_PORT)
         _client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
     return _client
 
@@ -33,7 +36,7 @@ def _get_collection() -> None:
     client = _get_client()
     collections = [c.name for c in client.get_collections().collections]
     if QDRANT_COLLECTION_NAME not in collections:
-        print(f"[store] Criando collection '{QDRANT_COLLECTION_NAME}'...")
+        logger.info("Criando collection '%s'...", QDRANT_COLLECTION_NAME)
         client.create_collection(
             collection_name=QDRANT_COLLECTION_NAME,
             vectors_config=VectorParams(
@@ -70,7 +73,7 @@ def add_documents(
         collection_name=QDRANT_COLLECTION_NAME,
         points=points,
     )
-    print(f"[store] {len(points)} chunks indexados com sucesso.")
+    logger.info("%d chunks indexados com sucesso.", len(points))
 
 
 def query_as_string(query_text: str, n_results: int = RAG_TOP_K) -> str:
@@ -108,9 +111,9 @@ def delete_collection() -> None:
     client = _get_client()
     try:
         client.delete_collection(QDRANT_COLLECTION_NAME)
-        print(f"[store] Collection '{QDRANT_COLLECTION_NAME}' removida.")
+        logger.info("Collection '%s' removida.", QDRANT_COLLECTION_NAME)
     except Exception:
-        print(f"[store] Collection não existe, pulando.")
+        logger.warning("Collection não existe, pulando.")
 
 
 def collection_info() -> dict:
